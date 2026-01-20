@@ -1,0 +1,12 @@
+---
+title: "single_cell_transcriptomic_map_of_human_and_mouse_pancreas"
+format: html
+---
+
+# Paper: https://pmc.ncbi.nlm.nih.gov/articles/PMC5228327/
+# GEO: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE84133
+# Github: https://github.com/shenorrLabTRDF/bseqsc
+
+```{r}
+library(bseqsc)
+```
