@@ -7,6 +7,13 @@ format: html
 # GEO: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE84133
 # Github: https://github.com/shenorrLabTRDF/bseqsc
 
+# Datasets stored in OneDrive
+```{r, eval=FALSE}
+# Change path as necessary
+output_path = "C:/Users/ankit/OneDrive - Savitribai Phule Pune University/Paper_Replication/single_cell_transcriptomic_map_of_human_and_mouse_pancreas"
+setwd(output_path)
+```
+
 ```{r}
 library(bseqsc)
 ```
