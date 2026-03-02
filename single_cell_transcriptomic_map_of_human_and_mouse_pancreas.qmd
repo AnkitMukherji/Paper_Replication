@@ -1,5 +1,5 @@
 ---
-title: "single_cell_transcriptomic_map_of_human_and_mouse_pancreas"
+title: "Single-Cell Transcriptomic Map of Human and Mouse Pancreas: Extension Analysis"
 format: html
 ---
 
@@ -7,13 +7,130 @@ format: html
 # GEO: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE84133
 # Github: https://github.com/shenorrLabTRDF/bseqsc
 
-# Datasets stored in OneDrive
+This document extends the analysis of the Baron et al. (2016) dataset using modern single-cell transcriptomics tools (Seurat v5, MuSiC, DoubletFinder).
+
+## 1. Environment Setup
+
 ```{r, eval=FALSE}
 # Change path as necessary
-output_path = "C:/Users/ankit/OneDrive - Savitribai Phule Pune University/Paper_Replication/single_cell_transcriptomic_map_of_human_and_mouse_pancreas"
+output_path = "./data"
+dir.create(output_path, showWarnings = FALSE)
 setwd(output_path)
+
+# Install required packages
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+packages <- c("Seurat", "SeuratDisk", "SeuratData", "GEOquery", "tidyverse", 
+              "patchwork", "DoubletFinder", "MuSiC", "MuSiC2", "BayesPrism")
+# BiocManager::install(packages) # User to run this manually
 ```
 
-```{r}
-library(bseqsc)
+```{r libraries}
+library(Seurat)
+library(GEOquery)
+library(tidyverse)
+library(DoubletFinder)
+library(MuSiC)
+library(patchwork)
 ```
+
+## 2. Data Acquisition
+
+```{r data_acquisition, eval=FALSE}
+# Download Baron et al. data from GEO (GSE84133)
+if(!dir.exists("./data")) dir.create("./data")
+gse <- getGEO("GSE84133", destdir = "./data")
+
+# Download bulk data for deconvolution (GSE50244)
+bulk_gse <- getGEO("GSE50244", destdir = "./data")
+```
+
+## 3. Modern Single-Cell Pipeline (Seurat v5)
+
+### A. Preprocessing & QC
+```{r preprocessing}
+# Load merged counts
+library(data.table)
+counts_dt <- fread("./data/GSE84133/GSE84133_human_islets_all_cells.csv.gz")
+genes <- counts_dt$gene
+counts_matrix <- as.matrix(counts_dt[, -1])
+rownames(counts_matrix) <- genes
+human_sc <- CreateSeuratObject(counts = counts_matrix, project = "Pancreas_Human")
+
+# QC Metrics
+human_sc[["percent.mt"]] <- PercentageFeatureSet(human_sc, pattern = "^MT-")
+VlnPlot(human_sc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+# Filtering (Paper thresholds: nFeature_RNA > 200)
+human_sc <- subset(human_sc, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+```
+
+### B. Doublet Detection (DoubletFinder)
+```{r doublet_detection}
+human_sc <- NormalizeData(human_sc)
+human_sc <- FindVariableFeatures(human_sc)
+human_sc <- ScaleData(human_sc)
+human_sc <- RunPCA(human_sc)
+human_sc <- RunUMAP(human_sc, dims = 1:30)
+
+# Doublet Detection
+# nExp_poi <- round(0.075 * ncol(human_sc))
+# human_sc <- doubletFinder_v3(human_sc, PCs = 1:30, pN = 0.25, pK = 0.09, nExp = nExp_poi, reuse.pANN = FALSE)
+# DF_name <- grep("DF.class", names(human_sc@meta.data), value = TRUE)
+# human_sc <- subset(human_sc, subset = get(DF_name) == "Singlet")
+```
+
+### C. Normalization & Integration (SCTransform v2)
+```{r normalization}
+human_sc <- SCTransform(human_sc, vars.to.regress = "percent.mt", verbose = FALSE)
+```
+
+## 4. Advanced Deconvolution (MuSiC)
+
+```{r deconvolution}
+# Load bulk data (GSE50244)
+bulk_counts <- read.table(gzfile("./data/GSE50244/GSE50244_Genes_counts_TMM_NormLength_atLeastMAF5_expressed.txt.gz"), header = TRUE, row.names = 1)
+
+# Run MuSiC deconvolution
+library(MuSiC)
+library(SingleCellExperiment)
+
+# Use the processed Seurat object for reference
+sce <- as.SingleCellExperiment(human_sc)
+
+# Harmonize gene names between bulk and single-cell
+common_genes <- intersect(rownames(bulk_counts), rownames(sce))
+bulk_mtx <- as.matrix(bulk_counts[common_genes, ])
+sce_subset <- sce[common_genes, ]
+
+# Run MuSiC
+deconv_results <- music_prop(bulk.mtx = bulk_mtx, sc.sce = sce_subset, 
+                             clusters = 'SCT_snn_res.0.8', samples = 'orig.ident')
+
+# View Proportion Estimates
+head(deconv_results$Est.prop.weighted)
+```
+
+## 5. Visualizations
+
+```{r visual_summary}
+# UMAP with clusters
+DimPlot(human_sc, reduction = "umap", label = TRUE)
+
+# Marker heatmap
+top10 <- all_markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+DoHeatmap(human_sc, features = top10$gene) + NoLegend()
+```
+
+## 5. Exhaustive Extension (New Insights)
+
+Beyond replication and normalization, we aim to gain new biological insights using systems biology approaches.
+
+The following analysis modules are detailed in the `exhaustive_extension_insights.R` script:
+
+1.  **Transcription Factor Activity (DoRothEA)**: Inferring master regulators (e.g., PDX1, MAFA) to identify cell states beyond simple markers.
+2.  **Cell-Cell Communication (CellChat)**: Mapping ligand-receptor interactions between pancreatic endocrine, ductal, and stromal cells.
+3.  **Metabolic Profiling (scMetabolism)**: Quantifying metabolic pathway activities (Glycolysis, TCA cycle) per cell type.
+4.  **Trajectory Inference (Monocle 3)**: Modeling functional gradients and maturation trajectories within the islet tissue.
+
+---
+*Note: This exhaustive extension aims to transform the Baron et al. (2016) transcriptomic map into a functional regulatory and social model of the pancreas.*

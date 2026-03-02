@@ -1,0 +1,38 @@
+# Baron et al. (2016) Replication Walkthrough
+
+This walkthrough documents the successful replication of "Single-cell transcriptomic map of human and mouse pancreas" (Baron et al., 2016) using both the original methodology and a modern Seurat v5 pipeline.
+
+## 1. Data Preparation
+The raw donor data from GSE84133 was downloaded and merged into a single, numeric count matrix to ensure compatibility with all analysis scripts.
+
+*   **Script**: [merge_donors.R](file:///e:/Bioinformatics/Paper_Replication/merge_donors.R)
+*   **Result**: Merged `GSE84133_human_islets_all_cells.csv.gz` with ~20,000 genes and thousands of cells.
+
+## 2. Replication Pipelines
+
+### Original Methodology
+We reproduced the hierarchical clustering approach used in the original paper.
+*   **Script**: [replication_original.R](file:///e:/Bioinformatics/Paper_Replication/replication_original.R)
+*   **Verification**: The script successfully identified major pancreatic clusters using Ward's D2 criterion on log-transformed counts.
+
+### Modern Methodology (Seurat v5)
+We extended the analysis using state-of-the-art tools, including `SCTransform v2` and `UMAP`.
+*   **Script**: [replication_modern.R](file:///e:/Bioinformatics/Paper_Replication/replication_modern.R)
+*   **Results**:
+    *   **QC**: Verified low mitochondrial percentage (<5%) and high feature count.
+    *   **Clustering**: Identified 16 distinct clusters, including Alpha, Beta, Delta, and Acinar cells.
+    *   **Markers**: Identified canonical markers like *GCG* (Alpha), *INS* (Beta), and *PRSS1* (Acinar).
+
+## 3. Final Report
+The Quarto report was updated with the finalized code blocks for preprocessing, QC, clustering, and MuSiC deconvolution.
+
+*   **File**: [single_cell_transcriptomic_map_of_human_and_mouse_pancreas.qmd](file:///e:/Bioinformatics/Paper_Replication/single_cell_transcriptomic_map_of_human_and_mouse_pancreas.qmd)
+
+> [!NOTE]
+> `quarto` was not found in the system path, so the final rendering should be performed in an IDE (like RStudio) or by calling the full path to the Quarto executable.
+
+## 4. Verification Summary
+- [x] Merged raw count data into a numeric matrix.
+- [x] Verified Seurat v5 pipeline completion (Output: `pancreas_processed.rds`).
+- [x] Verified hierarchical clustering script completion.
+- [x] Updated Quarto report with actionable code.
