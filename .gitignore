@@ -1,4 +1,15 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
+# ---------- R ----------
+**/renv/library/
+**/renv/staging/
+**/.Rhistory
+**/.RData
+
+# ---------- Python ----------
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.pyc
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
