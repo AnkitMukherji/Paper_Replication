@@ -1,13 +1,11 @@
 # Merge Baron et al. (2016) Human Donor Data
-# Properly aggregates genes with synonymous names (e.g., 7-Sep vs 7_Sep).
 
 library(data.table)
 
-data_dir <- "e:/Bioinformatics/Paper_Replication/data/GSE84133"
+output_path <- "C:/Users/hp/OneDrive - Savitribai Phule Pune University/Paper_Replication/single_cell_transcriptomic_map_of_human_and_mouse_pancreas"
+data_dir <- paste0(output_path, "/GSE84133")
+setwd(data_dir)
 human_files <- list.files(data_dir, pattern = "human.*_counts.csv.gz", full.names = TRUE)
-
-message("Merging files:")
-print(human_files)
 
 all_data <- list()
 
@@ -18,50 +16,38 @@ for (f in human_files) {
     # Read CSV (rows = cells, cols = metadata + genes)
     dt <- fread(f)
 
-    # Standardize index/barcode columns
-    # Find barcode column (sometimes called 'barcode', sometimes 'V1' or 'X' in headers)
-    barcode_col <- intersect(names(dt), c("barcode", "V1", "X"))[1]
+    # Finding barcode column
+    barcode_col <- intersect(names(dt), "barcode")
     if (is.na(barcode_col)) barcode_col <- names(dt)[1] # Fallback to first column
 
-    # Ensure cell names are unique across donors
+    # Ensuring cell names are unique across donors
     dt[[barcode_col]] <- paste0(donor_id, "_", dt[[barcode_col]])
 
     all_data[[donor_id]] <- dt
 }
 
-# 1. Combine all donors
-message("Combining all donor data...")
+# 1. Combining all donors
 merged_dt <- rbindlist(all_data, fill = TRUE)
 
-# 2. Extract metadata
-message("Extracting metadata...")
-barcode_col <- intersect(names(merged_dt), c("barcode", "V1", "X"))[1]
-metadata_cols <- intersect(names(merged_dt), c(barcode_col, "assigned_cluster"))
-metadata <- merged_dt[, ..metadata_cols]
-setnames(metadata, barcode_col, "barcode")
+# 2. Extracting metadata
+metadata <- merged_dt[, .(barcode, assigned_cluster)]
 metadata[, donor := sub("_.*", "", barcode)]
 
-# 3. Process count matrix
-message("Processing count matrix and aggregating duplicate genes...")
-# Exclude metadata for count part
-gene_cols <- setdiff(names(merged_dt), c("V1", "barcode", "X", "assigned_cluster"))
+# 3. Processing count matrix
+gene_cols <- setdiff(names(merged_dt), c("V1", "barcode", "assigned_cluster"))
 counts_dt <- merged_dt[, ..gene_cols]
 
-
-# Convert to matrix
+# Converting to matrix
 counts_matrix <- as.matrix(counts_dt)
-rownames(counts_matrix) <- merged_dt$cell_id
+rownames(counts_matrix) <- merged_dt$barcode
 counts_matrix <- t(counts_matrix)
 
-# Replace NAs with 0
+# Replacing NAs with 0
 counts_matrix[is.na(counts_matrix)] <- 0
 
-# 4. Save merged counts
+# 4. Saving merged counts
 output_file <- file.path(data_dir, "GSE84133_human_islets_all_cells.csv.gz")
-message("Saving merged matrix to ", output_file, "...")
 
 # Convert back to data.table for fwrite
 final_dt <- as.data.table(counts_matrix, keep.rownames = "gene")
 fwrite(final_dt, output_file)
-
-message("Merge complete.")
