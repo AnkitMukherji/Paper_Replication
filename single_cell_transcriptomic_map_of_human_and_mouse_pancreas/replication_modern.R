@@ -7,7 +7,8 @@ library(ggplot2)
 library(patchwork)
 
 # Set working directory
-data_dir <- "e:/Bioinformatics/Paper_Replication/data/GSE84133"
+output_path <- "C:/Users/hp/OneDrive - Savitribai Phule Pune University/Paper_Replication/single_cell_transcriptomic_map_of_human_and_mouse_pancreas"
+data_dir <- file.path(output_path, "GSE84133")
 
 # --- 1. Data Loading ---
 human_data_file <- file.path(data_dir, "GSE84133_human_islets_all_cells.csv.gz")
@@ -33,8 +34,11 @@ gc()
 # Calculate mitochondrial percentage (human genes usually start with MT-)
 pancreas[["percent.mt"]] <- PercentageFeatureSet(pancreas, pattern = "^MT-")
 
+# Extract donor info
+pancreas$donor <- sapply(strsplit(colnames(pancreas), "_"), `[`, 1)
+
 # Visualize QC metrics
-VlnPlot(pancreas, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+# VlnPlot(pancreas, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
 
 # Filter cells (Adjust thresholds based on VlnPlot results)
 # Standard thresholds: nFeature [200, 2500], percent.mt < 5%
@@ -44,18 +48,50 @@ pancreas <- subset(pancreas, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 &
 # SCTransform is the modern replacement for NormalizeData, ScaleData, and FindVariableFeatures
 pancreas <- SCTransform(pancreas, vars.to.regress = "percent.mt", verbose = FALSE)
 
-# --- 4. Dimensionality Reduction & Clustering ---
-pancreas <- RunPCA(pancreas, verbose = FALSE)
-ElbowPlot(pancreas) # Determine number of PCs
+# --- 4. Doublet Removal (DoubletFinder) ---
+message("Running DoubletFinder...")
+if (requireNamespace("DoubletFinder", quietly = TRUE)) {
+    library(DoubletFinder)
+    pancreas <- RunPCA(pancreas, verbose = FALSE)
+    pancreas <- RunUMAP(pancreas, dims = 1:20, verbose = FALSE)
 
-pancreas <- RunUMAP(pancreas, dims = 1:20, verbose = FALSE)
-pancreas <- FindNeighbors(pancreas, dims = 1:20, verbose = FALSE)
+    # Assuming ~7.5% doublet formation rate for 10k cells
+    nExp_poi <- round(0.075 * ncol(pancreas))
+    pancreas <- doubletFinder_v3(pancreas, PCs = 1:20, pN = 0.25, pK = 0.09, nExp = nExp_poi, reuse.pANN = FALSE, sct = TRUE)
+
+    # Remove doublets
+    DF.name <- grep("DF.classification", colnames(pancreas@meta.data), value = TRUE)
+    pancreas <- subset(pancreas, subset = get(DF.name) == "Singlet")
+    message(paste("Removed doublets. Remaining cells:", ncol(pancreas)))
+} else {
+    message("DoubletFinder package not found. Skipping doublet removal.")
+}
+
+# --- 5. Dimensionality Reduction & Integration (Harmony) ---
+message("Running Dimensionality Reduction and Harmony Integration...")
+pancreas <- RunPCA(pancreas, verbose = FALSE)
+
+if (requireNamespace("harmony", quietly = TRUE)) {
+    library(harmony)
+    pancreas <- RunHarmony(pancreas, group.by.vars = "donor", assay.use = "SCT")
+    reduction_use <- "harmony"
+} else {
+    message("harmony package not found. Proceeding without integration.")
+    reduction_use <- "pca"
+}
+
+pancreas <- RunUMAP(pancreas, reduction = reduction_use, dims = 1:20, verbose = FALSE)
+pancreas <- FindNeighbors(pancreas, reduction = reduction_use, dims = 1:20, verbose = FALSE)
 pancreas <- FindClusters(pancreas, resolution = 0.5, verbose = FALSE)
 
-# --- 5. Visualization ---
-DimPlot(pancreas, reduction = "umap", label = TRUE) + NoLegend()
+# --- 6. Visualization ---
+p_umap_cluster <- DimPlot(pancreas, reduction = "umap", label = TRUE) + NoLegend() + ggtitle("Seurat UMAP (Modern)")
+p_umap_donor <- DimPlot(pancreas, reduction = "umap", group.by = "donor") + ggtitle("Seurat UMAP by Donor")
 
-# --- 6. Marker Identification and Cluster Annotation ---
+ggsave(file.path(data_dir, "Baron_Modern_UMAP_Clusters.png"), p_umap_cluster, width = 8, height = 6)
+ggsave(file.path(data_dir, "Baron_Modern_UMAP_Donors.png"), p_umap_donor, width = 8, height = 6)
+
+# --- 7. Marker Identification and Cluster Annotation ---
 # Identify markers for every cluster compared to all remaining cells
 all_markers <- FindAllMarkers(pancreas, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
 all_markers %>%
@@ -71,11 +107,12 @@ all_markers %>%
 # Ductal: KRT19
 # Stellate: COL1A1
 # Endothelial: PECAM1
-# Immune: CD45 (PTPRC)
+# Immune: PTPRC (CD45), CD68
 
-FeaturePlot(pancreas, features = c("GCG", "INS", "SST", "PPY", "PRSS1", "KRT19"))
+p_canonical <- FeaturePlot(pancreas, features = c("GCG", "INS", "SST", "PPY", "PRSS1", "KRT19"))
+ggsave(file.path(data_dir, "Baron_Modern_Canonical_Markers.png"), p_canonical, width = 10, height = 8)
 
-# --- 7. Cell Type Assignment ---
+# --- 8. Cell Type Assignment ---
 # (Manual assignment based on markers)
 new_cluster_ids <- c("Alpha", "Beta", "Ductal", "Acinar", "Delta", "Gamma", "Stellate", "Endothelial", "Macrophage", "Mast", "Schwann", "Epsilon")
 # Note: Ensure the vector matches the number of clusters found
