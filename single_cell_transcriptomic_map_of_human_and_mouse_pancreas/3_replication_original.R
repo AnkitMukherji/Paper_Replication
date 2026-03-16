@@ -1,7 +1,6 @@
 # Replication of Baron et al. (2016)
 # Methodology focused on inDrop pipeline and recursive hierarchical clustering.
 
-library(bseqsc)
 library(edgeR)
 library(cluster)
 library(Rtsne)
