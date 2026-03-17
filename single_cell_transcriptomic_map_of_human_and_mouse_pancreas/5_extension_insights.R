@@ -49,8 +49,13 @@ p1 <- DoHeatmap(pancreas, features = top5_tfs$gene, slot = "scale.data") +
 # 2: Cell-Cell Communication (CellChat)
 library(CellChat)
 
+# Extract normalized data
+data.input <- GetAssayData(pancreas, assay = "SCT", layer = "data")
+
+meta <- pancreas@meta.data
+meta$ident <- paste0("Cluster_", Idents(pancreas))
 # Create CellChat object
-cellchat <- createCellChat(object = pancreas, group.by = "ident", assay = "SCT")
+cellchat <- createCellChat(object = data.input, meta = meta, group.by = "ident")
 
 # Set database
 CellChatDB <- CellChatDB.human
@@ -74,23 +79,41 @@ netVisual_circle(cellchat@net$count,
 # 3: Metabolic Profiling (scMetabolism)
 library(scMetabolism)
 
-# Run metabolic scoring
-pancreas <- sc.metabolism.Seurat(
-    obj = pancreas, method = "AUCell",
-    imputation = FALSE, ncores = 1,
-    metabolism.type = "KEGG"
+counts_mat <- GetAssayData(
+  pancreas,
+  assay = "RNA",
+  layer = "counts"
+)
+rna_v4 <- CreateAssayObject(counts = counts_mat)
+Key(rna_v4) <- "RNA_"
+pancreas_clean <- new(
+  Class = "Seurat",
+  assays = list(RNA = rna_v4),
+  meta.data = pancreas@meta.data
+)
+pancreas_clean <- new(
+  Class = "Seurat",
+  assays = list(RNA = rna_v4),
+  meta.data = pancreas@meta.data
+)
+DefaultAssay(pancreas_clean) <- "RNA"
+pancreas_clean <- NormalizeData(pancreas_clean)
+
+pancreas_clean <- sc.metabolism.Seurat(
+  obj = pancreas_clean,
+  method = "AUCell",
+  imputation = FALSE,
+  ncores = 1,
+  metabolism.type = "KEGG"
 )
 
-# Plot top metabolic pathways
-# Seurat automatically adds the scores to the metadata
-metabolic_cols <- grep("KEGG.", colnames(pancreas@meta.data), value = TRUE)
-if (length(metabolic_cols) > 0) {
-    p2 <- DotPlot(pancreas, features = metabolic_cols[1:10]) +
-        RotatedAxis() + ggtitle("Top Metabolic Pathway Scores")
-}
-
-
 # 4: Trajectory Inference (Monocle 3)
+# Install grr dependency
+# install.packages(
+#   "https://cran.r-project.org/src/contrib/Archive/grr/grr_0.9.5.tar.gz",
+#   repos = NULL,
+#   type = "source"
+# )
 library(monocle3)
 library(SeuratWrappers)
 
