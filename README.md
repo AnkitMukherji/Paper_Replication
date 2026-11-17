@@ -2,6 +2,10 @@
 
 R scripts for revisiting a published single-cell pancreas study, comparing an original-method replication with a modern workflow, and exploring additional biological analyses.
 
+## Folder guides
+
+- [Pancreas single-cell paper replication](single_cell_transcriptomic_map_of_human_and_mouse_pancreas/README.md)
+
 ## Study and data
 
 The project directory [single_cell_transcriptomic_map_of_human_and_mouse_pancreas/](single_cell_transcriptomic_map_of_human_and_mouse_pancreas/) contains a Baron et al. pancreas analysis. The downloader requests **GSE84133** for single-cell data and **GSE50244** for bulk RNA-seq used in the deconvolution context.
